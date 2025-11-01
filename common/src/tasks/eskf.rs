@@ -103,14 +103,21 @@ pub async fn main() -> ! {
     let mut snd_eskf_estimate = s::ESKF_ESTIMATE.sender();
     snd_eskf_estimate.send(EskfEstimate::default());
 
-    let mut filter = eskf::Builder::new()
-        .gravity(GRAVITY)
-        .acceleration_variance(0.1)
-        .acceleration_bias(0.01)
-        .rotation_variance(0.1)
-        .rotation_bias(0.01)
-        .initial_covariance(0.5)
-        .build();
+    let mut filter = eskf::ESKF::new();
+    filter.acc_bias_std(0.01);
+    filter.acc_noise_std(0.01);
+    filter.gyr_noise_std(0.1);
+    filter.gyr_bias_std(0.01);
+    filter.covariance_diag(0.5);
+    
+    // let mut filter = eskf::Builder::new()
+    //     .gravity(GRAVITY)
+    //     .acceleration_variance(0.1)
+    //     .acceleration_bias(0.01)
+    //     .rotation_variance(0.1)
+    //     .rotation_bias(0.01)
+    //     .initial_covariance(0.5)
+    //     .build();
 
     let mut delta = Delta::new();
 
@@ -128,7 +135,7 @@ pub async fn main() -> ! {
                 let estimate = EskfEstimate {
                     pos: filter.position.coords,
                     vel: filter.velocity,
-                    att: filter.orientation,
+                    att: filter.rotation,
                 };
 
                 // info!("Estimate: {:?}", estimate);

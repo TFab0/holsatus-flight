@@ -47,6 +47,8 @@ pub async fn main() -> ! {
     #[cfg(feature = "mpc")]
     let mut rcv_mpc_force_sp = crate::tasks::controller_mpc::MPC_TARGET_FRC.receiver();
 
+
+    
     // Get outputs
     let mut snd_rate_sp = s::TRUE_RATE_SP.sender();
     let mut snd_angle_sp = s::TRUE_ATTITUDE_Q_SP.sender();
@@ -61,9 +63,10 @@ pub async fn main() -> ! {
     );
 
     loop {
+        
         // Listen to all signals in order of priority, and handle them asyncronously.
         select_biased! {
-
+        
             // Update the control mode
             new_control_mode = rcv_control_mode.changed().fuse() => {
                 info!("{}: Changed mode to: {:?}", ID, new_control_mode);
@@ -131,18 +134,22 @@ pub async fn main() -> ! {
             },
 
             // Route MPC-generated attitude into angle controller
-            mpc_angle_sp = rcv_mpc_angle_sp.changed().fuse() => {
-                if control_mode == ControlMode::Autonomous {
-                    snd_angle_sp.send(mpc_angle_sp);
-                }
-            }
+            // #[cfg(feature = "mpc")]
+            // mpc_angle_sp = rcv_mpc_angle_sp.changed().fuse() => {
+            //     if control_mode == ControlMode::Autonomous {
+            //         snd_angle_sp.send(mpc_angle_sp);
+            //     }
+            // }
 
             // Route MPC-generated total thrust force
-            mpc_force_sp = rcv_mpc_force_sp.changed().fuse() => {
-                if control_mode == ControlMode::Autonomous {
-                    snd_z_thrust_sp.send(mpc_force_sp);
-                }
-            }
+            //     mpc_force_sp = rcv_mpc_force_sp.changed().fuse() => {
+            //         if control_mode == ControlMode::Autonomous {
+            //             snd_z_thrust_sp.send(mpc_force_sp);
+            //         }
+            // }
+
         };
+        
     }
+
 }

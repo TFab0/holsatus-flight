@@ -316,7 +316,7 @@ pub async fn main() -> ! {
 
             if split_idx != 0 {
                 let ref_step_size = axis.unscale(-(split_idx as f32));
-                info!("Step size: {:?}", ref_step_size);
+                // info!("Step size: {:?}", ref_step_size);
                 
                 for (idx, mut ref_col) in x_ref.column_iter_mut().enumerate() {
                     let coord = estimate.pos + ref_step_size.scale(idx as f32);

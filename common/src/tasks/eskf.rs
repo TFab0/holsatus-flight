@@ -211,7 +211,7 @@ pub async fn main() -> ! {
     ];
 
     let mut position_valid = false;
-
+    let mut now = Instant::now();
     info!("[eskf] Entering main loop");
     loop {
         match rcv_channel.receive().await {
@@ -244,7 +244,7 @@ pub async fn main() -> ! {
 
                 // Meat and potatos
                 filter.predict(imu_data.acc.into(), imu_data.gyr.into(), delta_time);
-
+                
                 // Using the latest delta time
                 comps.iter_mut().for_each(|c| c.set_dt(delta_time));
 
@@ -273,7 +273,11 @@ pub async fn main() -> ! {
                     gyr_bias: filter.gyr_bias,
                     acc_bias: filter.acc_bias,
                 };
-
+                
+                // if now.elapsed() > Duration::from_secs(1) {
+                //     now = Instant::now();
+                //     // debug!("[ESKF] orient: {:?}", estimate.att.euler_angles());
+                // }
                 snd_eskf_estimate.send(estimate);
             }
             Message::ViconData(vicon_data) => {

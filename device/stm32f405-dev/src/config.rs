@@ -23,7 +23,7 @@ pub(crate) fn hwinfo() -> common::types::device::HardwareInfo {
 
 pub(crate) fn imu() -> ImuConfig {
     ImuConfig::Icm20948(Config {
-        acc_range: AccRange::Gs8,
+        acc_range: AccRange::Gs4,
         gyr_range: GyrRange::Dps2000,
         acc_unit: AccUnit::Mpss,
         gyr_unit: GyrUnit::Rps,
@@ -36,7 +36,9 @@ pub(crate) fn imu() -> ImuConfig {
 
 pub(crate) fn i2c1() -> I2cConfig {
     I2cConfig {
-        frequency: 1_000_000,
+        // 400kHz is often marginal on dev wiring / weak pullups.
+        // Start conservative; bump back up once the bus is electrically solid.
+        frequency: 400_000,
         sda_pullup: true,
         scl_pullup: true,
     }
@@ -78,16 +80,13 @@ pub(crate) fn initialize() -> embassy_stm32::Peripherals {
     let mut config = embassy_stm32::Config::default();
 
     use embassy_stm32::rcc::*;
-    config.rcc.hse = Some(Hse {
-        freq: embassy_stm32::time::Hertz(8_000_000),
-        mode: HseMode::Oscillator,
-    });
-    config.rcc.pll_src = PllSource::HSE;
+    config.rcc.hse = None;
+    config.rcc.pll_src = PllSource::HSI;
     config.rcc.pll = Some(Pll {
-        prediv: PllPreDiv::DIV4,
+        prediv: PllPreDiv::DIV8,
         mul: PllMul::MUL168,
-        divp: Some(PllPDiv::DIV2), // 8mhz / 4 * 168 / 2 = 168Mhz.
-        divq: Some(PllQDiv::DIV7), // 8mhz / 4 * 168 / 7 = 48Mhz.
+        divp: Some(PllPDiv::DIV2), // 16mhz / 8 * 168 / 2 = 168Mhz.
+        divq: Some(PllQDiv::DIV7), // 16mhz / 8 * 168 / 7 = 48Mhz.
         divr: None,
     });
     config.rcc.ahb_pre = AHBPrescaler::DIV1;

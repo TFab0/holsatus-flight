@@ -25,7 +25,7 @@ assign_resources! {
         periph: I2C1,
         sda: PB9,
         scl: PB8,
-        tx_dma: DMA1_CH7,
+        tx_dma: DMA1_CH6,
         rx_dma: DMA1_CH0,
     }
     spi_1: Spi1 {
@@ -41,17 +41,17 @@ assign_resources! {
     usart_1: Usart1 {
         periph: USART1,
         rx_pin: PB7,
-        tx_pin: PA9,
+        tx_pin: PB6,
         rx_dma: DMA2_CH2,
         tx_dma: DMA2_CH7,
     }
-    usart_2: Usart2 {
-        periph: USART2,
-        rx_pin: PA3,
-        tx_pin: PA2,
-        rx_dma: DMA1_CH5,
-        tx_dma: DMA1_CH6,
-    }
+    // usart_2: Usart2 {
+    //     periph: USART2,
+    //     rx_pin: PA3,
+    //     tx_pin: PA2,
+    //     rx_dma: DMA1_CH5,
+    //     tx_dma: DMA1_CH6,
+    // }
     usart_3: Usart3 {
         periph: USART3,
         rx_pin: PB11,
@@ -109,11 +109,14 @@ impl IntPin {
 }
 
 impl I2c1 {
-    pub fn setup(self, cfg: I2cConfig) -> impl embedded_hal_async::i2c::I2c {
+    pub fn setup(mut self, cfg: I2cConfig) -> impl embedded_hal_async::i2c::I2c {
         bind_interrupts!(struct I2c1Irq {
             I2C1_EV => embassy_stm32::i2c::EventInterruptHandler<peripherals::I2C1>;
             I2C1_ER => embassy_stm32::i2c::ErrorInterruptHandler<peripherals::I2C1>;
         });
+
+        self.recover_bus();
+
 
         let mut config = embassy_stm32::i2c::Config::default();
         config.sda_pullup = cfg.sda_pullup;
@@ -128,6 +131,40 @@ impl I2c1 {
             self.rx_dma,
             config,
         )
+    }
+
+    fn recover_bus(&mut self) {
+        use embassy_stm32::gpio::{Flex, Pull, Speed};
+
+        let mut scl = Flex::new(self.scl.reborrow());
+        let mut sda = Flex::new(self.sda.reborrow());
+
+        scl.set_high();
+        sda.set_high();
+        scl.set_as_input_output_pull(Speed::Medium, Pull::Up);
+        sda.set_as_input_output_pull(Speed::Medium, Pull::Up);
+
+        // Clock out up to 16 pulses to release a slave holding SDA low.
+        for _ in 0..16 {
+            scl.set_low();
+            short_delay();
+            scl.set_high();
+            short_delay();
+        }
+
+        // Force a STOP condition (SDA low->high while SCL is high).
+        sda.set_low();
+        short_delay();
+        scl.set_high();
+        short_delay();
+        sda.set_high();
+        short_delay();
+    }
+}
+
+fn short_delay() {
+    for _ in 0..128 {
+        cortex_m::asm::nop();
     }
 }
 
@@ -401,7 +438,7 @@ static BUF_RX6: GrantableIo<128, EmbeddedIoError> = GrantableIo::new();
 static BUF_TX6: GrantableIo<128, EmbeddedIoError> = GrantableIo::new();
 
 impl_ring_buffered_usart_setup!(run_usart1, Usart1, USART1, rb = 32, BUF_RX1, BUF_TX1);
-impl_ring_buffered_usart_setup!(run_usart2, Usart2, USART2, rb = 32, BUF_RX2, BUF_TX2);
+// impl_ring_buffered_usart_setup!(run_usart2, Usart2, USART2, rb = 32, BUF_RX2, BUF_TX2);
 impl_ring_buffered_usart_setup!(run_usart3, Usart3, USART3, rb = 32, BUF_RX3, BUF_TX3);
 impl_ring_buffered_usart_setup!(run_usart6, Usart6, USART6, rb = 32, BUF_RX6, BUF_TX6);
 
@@ -429,11 +466,14 @@ pub mod usb {
                 OTG_FS => InterruptHandler<embassy_stm32::peripherals::USB_OTG_FS>;
             });
 
+            use embassy_stm32::interrupt::{self, InterruptExt, Priority};
+            interrupt::OTG_FS.set_priority(Priority::P13);
+
             static USB_BUFFER: StaticCell<[u8; USB_BUF_LEN]> = StaticCell::new();
             let usb_buffer = USB_BUFFER.init([0u8; USB_BUF_LEN]);
 
             let mut config = Config::default();
-            config.vbus_detection = true;
+            config.vbus_detection = false;
 
             embassy_stm32::usb::Driver::new_fs(
                 self.usb,

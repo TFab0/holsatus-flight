@@ -59,8 +59,8 @@ pub async fn main(driver: impl Driver<'static>, info: HardwareInfo) -> ! {
 
     let (usb_writer, usb_reader) = class.split();
 
-    static GRANTABLE_RX: GrantableIo<128, EmbeddedIoError> = GrantableIo::new();
-    static GRANTABLE_TX: GrantableIo<128, EmbeddedIoError> = GrantableIo::new();
+    static GRANTABLE_RX: GrantableIo<512, EmbeddedIoError> = GrantableIo::new();
+    static GRANTABLE_TX: GrantableIo<512, EmbeddedIoError> = GrantableIo::new();
 
     let (mut dev_cons, app_prod) = GRANTABLE_RX.claim_writer();
     let (mut dev_prod, app_cons) = GRANTABLE_TX.claim_reader();

@@ -56,7 +56,13 @@ pub async fn main(serial_id: &'static str) -> ! {
         info!("[cli] usb connection: {:?}", con);
 
         if let Err(error) = run_cli(&mut serial).await {
-            error!("[cli] Error on serial device: {:?}", error);
+            match error {
+                EmbeddedIoError::NotConnected | EmbeddedIoError::TimedOut => {
+                    info!("[cli] USB session ended: {:?}", error);
+                    Timer::after_millis(100).await;
+                }
+                _ => error!("[cli] Error on serial device: {:?}", error),
+            }
         }
     }
 }
@@ -64,8 +70,8 @@ pub async fn main(serial_id: &'static str) -> ! {
 pub async fn run_cli(serial: &mut IoStream) -> Result<(), EmbeddedIoError> {
     info!("[cli] Starting CLI runner");
 
-    let mut command_buffer = [0u8; 32];
-    let mut history_buffer = [0u8; 32];
+    let mut command_buffer = [0u8; 128];
+    let mut history_buffer = [0u8; 128];
 
     let mutexed_serial = Mutex::new(serial);
 
@@ -76,6 +82,7 @@ pub async fn run_cli(serial: &mut IoStream) -> Result<(), EmbeddedIoError> {
         let mut m_serial = mutexed_serial.lock().await;
         m_serial.write_all(CLEAR_SCREEN).await?;
         m_serial.write_all(HOLSATUS_GRAPHIC).await?;
+        m_serial.write_all(CMD_PROMPT.as_bytes()).await?;
     }
 
     let mut sync_writer = SyncWriter::new(&mutexed_serial);
@@ -86,7 +93,7 @@ pub async fn run_cli(serial: &mut IoStream) -> Result<(), EmbeddedIoError> {
         .prompt(CMD_PROMPT)
         .build()?;
 
-    let mut buffer = [0u8; 8];
+    let mut buffer = [0u8; 64];
     loop {
         let n = {
             let mut m_serial = mutexed_serial.lock().await;
@@ -102,13 +109,16 @@ pub async fn run_cli(serial: &mut IoStream) -> Result<(), EmbeddedIoError> {
         for byte in buffer.iter().take(n) {
             // Process the byte from the serial port
             let mut parsed_command = None;
-            cli.process_byte::<Base, _>(
+            if let Err(error) = cli.process_byte::<Base, _>(
                 *byte,
                 &mut Base::processor(|_, command| {
                     parsed_command = Some(command);
                     Ok(())
                 }),
-            )?;
+            ) {
+                error!("[cli] parse error: {:?}", error);
+                continue;
+            }
 
             if let Some(command) = parsed_command {
                 // Lock the serial port for writing (with async!)
@@ -119,22 +129,35 @@ pub async fn run_cli(serial: &mut IoStream) -> Result<(), EmbeddedIoError> {
                 serial.write_all(CLEAR_LINE).await?;
                 serial.write_all(b"\r").await?;
 
-                match command {
-                    Base::Cal { cmd } => cmd.handler(&mut serial).await?,
-                    Base::Sys { cmd } => cmd.handler(&mut serial).await?,
+                let command_result = match command {
+                    Base::Cal { cmd } => cmd.handler(&mut serial).await,
+                    Base::Sys { cmd } => cmd.handler(&mut serial).await,
                     #[cfg(feature = "mavlink")]
-                    Base::Mavlink { cmd } => cmd.handler(&mut serial).await?,
-                    Base::Arming { cmd } => cmd.handler(&mut serial).await?,
-                    Base::Param { cmd } => cmd.handler(&mut serial).await?,
-                    Base::Inspect { cmd } => cmd.handler(&mut serial).await?,
+                    Base::Mavlink { cmd } => cmd.handler(&mut serial).await,
+                    Base::Arming { cmd } => cmd.handler(&mut serial).await,
+                    Base::Param { cmd } => cmd.handler(&mut serial).await,
+                    Base::Inspect { cmd } => cmd.handler(&mut serial).await,
 
-                    Base::Clear => serial.write_all(CLEAR_SCREEN).await?,
-                    Base::Splash => serial.write_all(HOLSATUS_GRAPHIC).await?,
+                    Base::Clear => serial.write_all(CLEAR_SCREEN).await,
+                    Base::Splash => serial.write_all(HOLSATUS_GRAPHIC).await,
+                };
+
+                if let Err(error) = command_result {
+                    match error {
+                        EmbeddedIoError::NotConnected | EmbeddedIoError::TimedOut => {
+                            return Err(error);
+                        }
+                        _ => {
+                            error!("[cli] command handler error: {:?}", error);
+                            let _ = serial.write_all(b"[error] Command failed\n\r").await;
+                        }
+                    }
                 }
 
                 // At the end of parsed command, show the prompt
                 serial.write_all(b"\n\r").await?;
                 serial.write_all(CMD_PROMPT.as_bytes()).await?;
+                serial.flush().await?;
             }
         }
     }

@@ -33,8 +33,11 @@ pub async fn main() -> ! {
     let mut rcv_calibrate = s::CMD_CALIBRATE.receiver();
     let mut snd_calibrator_state = s::CALIBRATOR_STATE.sender();
 
+    info!("{}: Task started", ID);
+
     loop {
         snd_calibrator_state.send(CalibratorState::Idle);
+        debug!("{}: Waiting for calibration command", ID);
         match rcv_calibrate.changed().await {
             // Calibrate accelerometer
             Calibrate::Acc(acc_calib, _) => {

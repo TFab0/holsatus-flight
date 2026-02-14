@@ -3,7 +3,10 @@
 
 use core::sync::atomic::Ordering;
 
+use common::embassy_time;
+use defmt::info;
 use defmt_rtt as _;
+use dshot_encoder::command;
 use panic_probe as _;
 
 mod config;
@@ -47,18 +50,24 @@ async fn main(level_t_spawner: embassy_executor::Spawner) {
 
     // Create interrupt executors
     let level_0_spawner = interrupt_executor!(CAN1_RX0, P10);
+    // common::embassy_time::Timer::after_secs(2).await;
     let level_1_spawner = interrupt_executor!(CAN1_RX1, P11);
 
     // Might as well start the parameter storage module to get things loaded
     level_t_spawner.spawn(resources::param_storage(r.flash, config::flash()).unwrap());
-
+    common::embassy_time::Timer::after_secs(1).await;
     // Give special priority to the serial port used as primary input
+    level_0_spawner.spawn(resources::imu_reader(r.i2c_1, config::i2c1(), config::imu()).unwrap());
     level_0_spawner.spawn(resources::run_usart1(r.usart_1, config::usart1(), "usart1").unwrap()); // CRSF
-    level_1_spawner.spawn(resources::run_usart2(r.usart_2, config::usart2(), "usart2").unwrap()); // UNUSED
+    // level_1_spawner.spawn(resources::run_usart2(r.usart_2, config::usart2(), "usart2").unwrap()); // UNUSED
     level_1_spawner.spawn(resources::run_usart3(r.usart_3, config::usart3(), "usart3").unwrap()); // MAVLINK
     level_1_spawner.spawn(resources::run_usart6(r.usart_6, config::usart6(), "usart6").unwrap()); // GNSS
 
-    common::embassy_time::Timer::after_millis(10).await;
+    common::embassy_time::Timer::after_secs(1).await;
+
+    // Bring up IMU before USB to reduce startup-time contention/noise during I2C init.
+    
+    common::embassy_time::Timer::after_millis(500).await;
 
     #[cfg(feature = "usb")]
     {
@@ -72,12 +81,11 @@ async fn main(level_t_spawner: embassy_executor::Spawner) {
     #[cfg(feature = "sdmmc")]
     level_t_spawner.spawn(resources::sdmmc::blackbox_fat(r.sdcard, config::sdmmc()).unwrap());
 
-    common::embassy_time::Timer::after_millis(1).await;
+    common::embassy_time::Timer::after_millis(1000).await;
 
     // ------------------ high-priority tasks -------------------
 
     // These take direct ownership of their hardware to avoid additional complexity
-    level_0_spawner.spawn(resources::imu_reader(r.i2c_1, config::i2c1(), config::imu()).unwrap());
     level_0_spawner.spawn(resources::motor_governor(r.motors, config::motor()).unwrap());
 
     level_0_spawner.spawn(common::tasks::rc_reader::main("usart1").unwrap());
@@ -110,8 +118,7 @@ async fn main(level_t_spawner: embassy_executor::Spawner) {
     level_t_spawner.spawn(auto_program_entry().unwrap());
 
     // -------------------------- fin ---------------------------
-    common::embassy_time::Timer::after_secs(1).await;
-
+    common::embassy_time::Timer::after_secs(5).await;
     loop {
         defmt::debug!("[stm32f405-dev] thread-mode execution operating as intended");
         common::embassy_time::Timer::after_secs(10).await;
@@ -122,6 +129,11 @@ async fn main(level_t_spawner: embassy_executor::Spawner) {
 async fn auto_program_entry() -> ! {
     use common::types::control::ControlMode;
     let mut rcv_flight_mode = common::tasks::commander::CMD_CONTROL_MODE.receiver();
+    let mut snd_calib = common::signals::CMD_CALIBRATE.sender();
+    common::embassy_time::Timer::after_secs(5).await;
+    // snd_calib.send(common::calibration::Calibrate::Acc(common::calibration::AccCalib::default(), None));
+    info!("[auto] Entering Main Program");
+    
 
     loop {
         // Wait for us change to autonomous mode, then run the auto_program

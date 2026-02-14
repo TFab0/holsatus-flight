@@ -1,7 +1,7 @@
 use super::GyrCalib;
 use crate::{errors::CalibrationError, signals as s, types::measurements::Imu6DofData};
 
-use embassy_time::{Duration, Ticker};
+use embassy_time::{Duration, Timer};
 use nalgebra::{SMatrix, Vector3};
 
 /// Routine to calibrate gyroscopes, by calculating their bias.
@@ -30,7 +30,7 @@ pub async fn calibrate_gyr_bias(
 
     // Determine how frequently we need to sample
     let frequency = (ACC_BUFFER_SIZE * ACC_SAMPLE_DIV) as u64 / config.duration_s as u64;
-    let mut ticker = Ticker::every(Duration::from_hz(frequency));
+    let period = Duration::from_hz(frequency);
 
     // Number of IMU measurements that were "dropped"
     let mut num_dropped = 0;
@@ -40,7 +40,7 @@ pub async fn calibrate_gyr_bias(
 
     // Calibration loop
     let acc_variance = 'calibration: loop {
-        ticker.next().await;
+        Timer::after(period).await;
 
         let Some(imu_data) = rcv_raw_imu.try_changed() else {
             if num_dropped > config.max_dropped {

@@ -17,7 +17,7 @@ pub mod rc_binder;
 pub mod rc_reader;
 pub mod signal_router;
 pub mod signal_stats;
-
+pub mod chk_rate;
 pub mod in_flight_estimator;
 
 #[cfg(feature = "usb")]

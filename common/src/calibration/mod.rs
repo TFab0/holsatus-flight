@@ -22,7 +22,7 @@ impl Default for AccCalib {
     fn default() -> Self {
         Self {
             max_var: 0.01,
-            max_dropped: 10,
+            max_dropped: 100,
         }
     }
 }

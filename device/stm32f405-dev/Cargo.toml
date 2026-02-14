@@ -4,8 +4,8 @@ version = "0.1.0"
 edition = "2021"
 
 [features]
-default = ["mpc", "mavlink", "gnss"]
-
+# default = ["mpc", "mavlink", "gnss"]
+default = ["mpc", "usb"]
 mpc = ["common/mpc"]
 
 # Enable the on-board sdmmc controller for SD card support.

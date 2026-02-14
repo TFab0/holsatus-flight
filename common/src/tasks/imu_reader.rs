@@ -55,7 +55,7 @@ pub async fn main_6dof_i2c(mut i2c: impl I2c, config: ImuConfig, addr: Option<u8
             Err(error) => {
                 error!("{}: Setup of I2C imu failed: {:?}", ID, error);
                 register_error(error);
-                Timer::after_secs(1).await;
+                Timer::after_secs(2).await;
             }
         };
     };
@@ -108,6 +108,9 @@ pub async fn main_6dof(mut imu: impl Imu6Dof) -> ! {
 
     // Sampling time
     let mut ticker = Ticker::every(Duration::from_hz(get_ctrl_freq!() as u64));
+    // let mut now = Instant::now();
+    // let mut read_ct = 0;
+    // let mut prev_acc_x = 0.0;
 
     info!("{}: Entering main loop", ID);
     'infinite: loop {
@@ -135,6 +138,10 @@ pub async fn main_6dof(mut imu: impl Imu6Dof) -> ! {
                 };
 
                 let timestamp = Instant::now();
+                // if (prev_acc_x - raw_imu_data.acc[0]).abs() > 0.001 {
+                //     read_ct += 1;
+                // }
+                // prev_acc_x = raw_imu_data.acc[0];
 
                 // Apply rotation
                 let rot_acc_data = &imu_rot * raw_imu_data.acc.into();
@@ -157,7 +164,11 @@ pub async fn main_6dof(mut imu: impl Imu6Dof) -> ! {
                     acc: cal_acc_data.into(),
                     gyr: cal_gyr_data.into(),
                 };
-
+                // if now.elapsed() > Duration::from_secs(1) {
+                //     now = Instant::now();
+                //     debug!("{}: IMU average frequency: {} Hz",ID, read_ct as f32 / 1.0);
+                //     read_ct = 0;
+                // }
                 // Transmit
                 critical_section::with(|_| {
                     snd_raw_imu_data.send(rot_imu_data);

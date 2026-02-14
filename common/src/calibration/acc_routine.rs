@@ -2,7 +2,7 @@ use super::{sens3d::Calib3D, AccCalib};
 
 use crate::*;
 
-use embassy_time::{Duration, Ticker};
+use embassy_time::{Duration, Instant, Timer};
 use nalgebra::{SMatrix, Vector3};
 
 use crate::{
@@ -30,17 +30,17 @@ pub async fn calibrate_acc(config: AccCalib, sensor_id: u8) -> Result<Calib3D, C
     let mut calibrator = AccCalibrator::<ACC_BUFFER_SIZE>::new(config.max_var);
 
     let mut num_dropped = 0;
-
-    let mut ticker = Ticker::every(Duration::from_hz(25));
+    let period = Duration::from_hz(25);
 
     // Mark any stale data as seen
     _ = rcv_raw_imu.try_get();
 
     // Calibration loop
     let calib = 'calibration: loop {
-        ticker.next().await;
+        Timer::after(period).await;
 
         let Some(imu_data) = rcv_raw_imu.try_changed() else {
+
             if num_dropped > config.max_dropped {
                 Err(CalibrationError::AccMaxDropped)?
             } else {

@@ -67,23 +67,24 @@ impl super::CommandHandler for InspectCommand {
                     match kind {
                         SensorKind::Attitude => {
                             serial.write_all(b"Estimated attitude data:\n\r").await?;
-                            if let Some(attitude) = crate::signals::AHRS_ATTITUDE.try_get() {
-                                let mut buffer = UBuffer::<64>::new();
-                                uwriteln!(buffer, "- x: {} rad", UFloat(attitude[0], 4))?;
-                                uwriteln!(buffer, "- y: {} rad", UFloat(attitude[1], 4))?;
-                                uwriteln!(buffer, "- z: {} rad", UFloat(attitude[2], 4))?;
-                                serial.write(buffer.bytes()).await?;
+                            if let Some(esk_est) = crate::signals::ESKF_ESTIMATE.try_get() {
+                                let mut buffer = UBuffer::<128>::new();
+                                let rpy = esk_est.att.euler_angles();
+                                uwriteln!(buffer, "- x: {} rad", UFloat(rpy.0, 4))?;
+                                uwriteln!(buffer, "- y: {} rad", UFloat(rpy.1, 4))?;
+                                uwriteln!(buffer, "- z: {} rad", UFloat(rpy.2, 4))?;
+                                serial.write_all(buffer.bytes()).await?;
                             }
                         }
                         SensorKind::Gyroscope => {
                             serial.write_all(b"Raw gyroscope data:\n\r").await?;
                             if let Some(imu_data) = crate::signals::RAW_MULTI_IMU_DATA[0].try_get()
                             {
-                                let mut buffer = UBuffer::<64>::new();
+                                let mut buffer = UBuffer::<128>::new();
                                 uwriteln!(buffer, "- x: {} rad/s", UFloat(imu_data.gyr[0], 4))?;
                                 uwriteln!(buffer, "- y: {} rad/s", UFloat(imu_data.gyr[1], 4))?;
                                 uwriteln!(buffer, "- z: {} rad/s", UFloat(imu_data.gyr[2], 4))?;
-                                serial.write(buffer.bytes()).await?;
+                                serial.write_all(buffer.bytes()).await?;
                             } else {
                                 serial
                                     .write_all(
@@ -95,11 +96,11 @@ impl super::CommandHandler for InspectCommand {
                             serial.write_all(b"Calibrated gyroscope data:\n\r").await?;
                             if let Some(imu_data) = crate::signals::CAL_MULTI_IMU_DATA[0].try_get()
                             {
-                                let mut buffer = UBuffer::<64>::new();
+                                let mut buffer = UBuffer::<128>::new();
                                 uwriteln!(buffer, "- x: {} rad/s", UFloat(imu_data.gyr[0], 4))?;
                                 uwriteln!(buffer, "- y: {} rad/s", UFloat(imu_data.gyr[1], 4))?;
                                 uwriteln!(buffer, "- z: {} rad/s", UFloat(imu_data.gyr[2], 4))?;
-                                serial.write(buffer.bytes()).await?;
+                                serial.write_all(buffer.bytes()).await?;
                             } else {
                                 serial.write_all(b"Could not get calibrated gyroscope data at this time.\n\r").await?;
                             }
@@ -108,11 +109,11 @@ impl super::CommandHandler for InspectCommand {
                             serial.write_all(b"Raw accelerometer data:\n\r").await?;
                             if let Some(imu_data) = crate::signals::RAW_MULTI_IMU_DATA[0].try_get()
                             {
-                                let mut buffer = UBuffer::<64>::new();
+                                let mut buffer = UBuffer::<128>::new();
                                 uwriteln!(buffer, "- x: {} m/s^2", UFloat(imu_data.acc[0], 4))?;
                                 uwriteln!(buffer, "- y: {} m/s^2", UFloat(imu_data.acc[1], 4))?;
                                 uwriteln!(buffer, "- z: {} m/s^2", UFloat(imu_data.acc[2], 4))?;
-                                serial.write(buffer.bytes()).await?;
+                                serial.write_all(buffer.bytes()).await?;
                             } else {
                                 serial
                                     .write_all(
@@ -126,16 +127,18 @@ impl super::CommandHandler for InspectCommand {
                                 .await?;
                             if let Some(imu_data) = crate::signals::CAL_MULTI_IMU_DATA[0].try_get()
                             {
-                                let mut buffer = UBuffer::<64>::new();
+                                let mut buffer = UBuffer::<128>::new();
                                 uwriteln!(buffer, "- x: {} m/s^2", UFloat(imu_data.acc[0], 4))?;
                                 uwriteln!(buffer, "- y: {} m/s^2", UFloat(imu_data.acc[1], 4))?;
                                 uwriteln!(buffer, "- z: {} m/s^2", UFloat(imu_data.acc[2], 4))?;
-                                serial.write(buffer.bytes()).await?;
+                                serial.write_all(buffer.bytes()).await?;
                             } else {
                                 serial.write_all(b"Could not get calibrated accelerometer data at this time.\n\r").await?;
                             }
                         }
                     }
+
+                    serial.flush().await?;
 
                     // TODO - Maybe we can isolate this functionality into a
                     // helper function

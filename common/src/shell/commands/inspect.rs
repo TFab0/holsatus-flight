@@ -67,9 +67,9 @@ impl super::CommandHandler for InspectCommand {
                     match kind {
                         SensorKind::Attitude => {
                             serial.write_all(b"Estimated attitude data:\n\r").await?;
-                            if let Some(esk_est) = crate::signals::ESKF_ESTIMATE.try_get() {
+                            if let Some(att_est) = crate::signals::AHRS_ATTITUDE_Q.try_get() {
                                 let mut buffer = UBuffer::<128>::new();
-                                let rpy = esk_est.att.euler_angles();
+                                let rpy = att_est.euler_angles();
                                 uwriteln!(buffer, "- x: {} rad", UFloat(rpy.0, 4))?;
                                 uwriteln!(buffer, "- y: {} rad", UFloat(rpy.1, 4))?;
                                 uwriteln!(buffer, "- z: {} rad", UFloat(rpy.2, 4))?;
